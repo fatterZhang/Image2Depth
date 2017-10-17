@@ -22,7 +22,7 @@ def get_norm_layer(norm_type='instance'):
     return norm_layer
 
 # define the generator and initialize
-def defineG(input_nc, output_nc, ngf, layers=[2,2,2,2], norm='batch', use_dropout=False,gpu_ids=[]):
+def define_G(input_nc, output_nc, ngf, layers=[2,2,2,2], norm='batch', use_dropout=False,gpu_ids=[]):
     netG = None
     use_gpu = len(gpu_ids) > 0
     norm_layer = get_norm_layer(norm_type=norm)
@@ -64,7 +64,7 @@ def print_network(net):
     print ('Total number of parameters: %d' % num_params)
 
 # Define the Unet
-class _netG_Unet(nn.model):
+class _netG_Unet(nn.Module):
     def __init__(self, input_nc, output_nc, ngf=64, layers=[2,2,2,2], norm_layer=nn.BatchNorm2d, use_dropout=False,
                  gpu_ids=[], padding_type='reflect'):
         super(_netG_Unet, self).__init__()
@@ -90,7 +90,9 @@ class _netG_Unet(nn.model):
                 nn.Tanh()
         ]
 
-        self.model = encoder + unet_block + decoder
+        model = encoder + [unet_block] + decoder
+
+        self.model = nn.Sequential(*model)
 
     def forward(self, input):
         if isinstance(input.data, torch.cuda.FloatTensor) and self.gpu_ids:
@@ -116,7 +118,7 @@ class UnetBlock(nn.Module):
                 nn.ConvTranspose2d(input_nc*2, output_nc, kernel_size=4, stride=2, padding=1, bias=use_bias),
                 norm_layer(output_nc),
             ]
-            model = encoder + decoder
+            model = [encoder] + decoder
         else:
             decoder = [
                 nn.ReLU(True),
@@ -124,9 +126,9 @@ class UnetBlock(nn.Module):
                 norm_layer(output_nc)
             ]
             if use_dropout:
-                model = encoder + [submodule] + decoder + [nn.Dropout(0.5)]
+                model = [encoder] + [submodule] + decoder + [nn.Dropout(0.5)]
             else:
-                model = encoder + [submodule] + decoder
+                model = [encoder] + [submodule] + decoder
 
         self.model = nn.Sequential(*model)
         self.relu = nn.ReLU(True)
@@ -161,7 +163,7 @@ class BasicBlock(nn.Module):
         super(BasicBlock, self).__init__()
 
         conv_block = [
-                nn.Conv2d(input_nc, output_nc, kernel_size=3, stride=stride, bias=use_bias),
+                nn.Conv2d(input_nc, output_nc, kernel_size=3, stride=stride, padding=1, bias=use_bias),
                 norm_layer(output_nc),
                 nn.ReLU(True)
         ]
@@ -169,8 +171,8 @@ class BasicBlock(nn.Module):
         if use_dropout:
             conv_block += [nn.Dropout(0.5)]
 
-        conv_block = [
-                nn.Conv2d(output_nc, output_nc, kernel_size=3, stride=stride, bias=use_bias),
+        conv_block += [
+                nn.Conv2d(output_nc, output_nc, kernel_size=3, stride=stride, padding=1, bias=use_bias),
                 norm_layer(output_nc)
         ]
 
@@ -190,7 +192,7 @@ class BasicBlock(nn.Module):
         return out
 
 # Define the Discriminator layer
-class _netD(nn.model):
+class _netD(nn.Module):
     def __init__(self,input_nc,ndf=64,n_layer=3,norm_layer = nn.BatchNorm2d,gpu_ids =[]):
         super(_netD,self).__init__()
         self.gpu_ids = gpu_ids
@@ -205,7 +207,7 @@ class _netD(nn.model):
         ]
 
         nf_mult = 1
-        for n in range(1,norm_layer):
+        for n in range(1,n_layer):
             nf_mult_prev = nf_mult
             nf_mult = min(2**n,8)
             sequence +=[
