@@ -75,27 +75,27 @@ class _netG_Unet(nn.Module):
             use_bias = norm_layer == nn.InstanceNorm2d
 
         encoder = [nn.ReplicationPad2d(3),
-                 nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0, bias=use_bias),
+                 nn.Conv2d(input_nc, ngf, kernel_size=7, stride=2, padding=0, bias=use_bias),
                  norm_layer(ngf),
-                 nn.ReLU(True)
+                 nn.ReLU()
                  ]
 
-        unet_block = UnetBlock (ngf*8,ngf*8,blocks=layers[0],norm_layer=norm_layer,innermost=True)
-        unet_block = UnetBlock (ngf*4,ngf*4,blocks=layers[1],submodule=unet_block,norm_layer=norm_layer)
-        unet_block = UnetBlock (ngf*2,ngf*2,blocks=layers[2],submodule=unet_block,norm_layer=norm_layer)
-        unet_block = UnetBlock (ngf,ngf,blocks=layers[3],submodule=unet_block,norm_layer=norm_layer)
+        unet_block = UnetBlock (ngf,ngf,blocks=layers[0],norm_layer=norm_layer,innermost=True)
+        #unet_block = UnetBlock (ngf*4,ngf*4,blocks=layers[1],submodule=unet_block,norm_layer=norm_layer)
+        #unet_block = UnetBlock (ngf*2,ngf*2,blocks=layers[2],submodule=unet_block,norm_layer=norm_layer)
+        #unet_block = UnetBlock (ngf,ngf,blocks=layers[3],submodule=unet_block,norm_layer=norm_layer)
 
-        decoder = [nn.ReLU(True),
+        decoder = [nn.ReLU(),
                 nn.ConvTranspose2d(ngf,output_nc,kernel_size=4,stride=2,padding=1),
                 nn.Tanh()
         ]
 
-        model = encoder + [unet_block] + decoder
+        model = encoder + [unet_block]+ decoder
 
         self.model = nn.Sequential(*model)
 
     def forward(self, input):
-        if isinstance(input.data, torch.cuda.FloatTensor) and self.gpu_ids:
+        if isinstance(input.data, torch.cuda.FloatTensor) and len(self.gpu_ids):
             return nn.parallel.data_parallel(self.model, input, self.gpu_ids)
         else:
             return self.model(input)
@@ -111,18 +111,18 @@ class UnetBlock(nn.Module):
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
 
-        encoder = self._make_layer(BasicBlock,input_nc*2,blocks,norm_layer,use_bias,use_dropout)
+        encoder = self._make_layer(Bottlenck,input_nc,blocks,norm_layer,use_bias,use_dropout,stride=2)
 
         if innermost:
             decoder = [
-                nn.ConvTranspose2d(input_nc*2, output_nc, kernel_size=4, stride=2, padding=1, bias=use_bias),
+                nn.ConvTranspose2d(input_nc*4, output_nc, kernel_size=4, stride=2, padding=1, bias=use_bias),
                 norm_layer(output_nc),
             ]
             model = [encoder] + decoder
         else:
             decoder = [
                 nn.ReLU(True),
-                nn.ConvTranspose2d(input_nc*2, output_nc, kernel_size=4, stride=2, padding=1, bias=use_bias),
+                nn.ConvTranspose2d(input_nc*4, output_nc, kernel_size=4, stride=2, padding=1, bias=use_bias),
                 norm_layer(output_nc)
             ]
             if use_dropout:
@@ -132,7 +132,7 @@ class UnetBlock(nn.Module):
 
         self.model = nn.Sequential(*model)
         self.relu = nn.ReLU(True)
-        self.conv = nn.Conv2d(output_nc*2,output_nc,kernel_size=3, stride=1)
+        self.conv = nn.Conv2d(output_nc*2,output_nc,kernel_size=3, stride=1,padding=1)
 
     def _make_layer(self,block,output_nc,blocks,norm_layer,use_bias,use_dropout,stride=1):
         downsample = None
@@ -145,7 +145,7 @@ class UnetBlock(nn.Module):
         layer = [block(self.input_nc,output_nc,norm_layer,use_bias,use_dropout,stride,downsample)]
         self.input_nc = output_nc*block.expansion
         for i in range(1,blocks):
-            layer +=[block(self.input_nc,output_nc,norm_layer,use_bias)]
+            layer +=[block(self.input_nc,output_nc,norm_layer,use_bias,use_dropout)]
 
         return nn.Sequential(*layer)
 
@@ -172,7 +172,7 @@ class BasicBlock(nn.Module):
             conv_block += [nn.Dropout(0.5)]
 
         conv_block += [
-                nn.Conv2d(output_nc, output_nc, kernel_size=3, stride=stride, padding=1, bias=use_bias),
+                nn.Conv2d(output_nc, output_nc, kernel_size=3,padding=1, bias=use_bias),
                 norm_layer(output_nc)
         ]
 
@@ -191,6 +191,43 @@ class BasicBlock(nn.Module):
 
         return out
 
+# define a bottleneck
+class Bottlenck(nn.Module):
+    expansion = 4
+
+    def __init__(self, input_nc, output_nc, norm_layer, use_bias, use_dropout=False, stride=1, downsample=None):
+        super(Bottlenck,self).__init__()
+        conv_block = [
+            nn.Conv2d(input_nc, output_nc, kernel_size=1, bias=use_bias),
+            norm_layer(output_nc),
+            nn.ReLU(True)
+        ]
+        conv_block +=[
+            nn.Conv2d(output_nc, output_nc, kernel_size=3, stride=stride, padding=1, bias=use_bias),
+            norm_layer(output_nc),
+            nn.ReLU(True)
+        ]
+        conv_block +=[
+            nn.Conv2d(output_nc, output_nc*4, kernel_size=1, bias=use_bias),
+            norm_layer(output_nc*4)
+        ]
+
+        self.conv_block = nn.Sequential(*conv_block)
+        self.relu = nn.Sequential(nn.ReLU(True))
+        self.downsample = downsample
+
+    def forward(self, x):
+        if self.downsample is not None:
+            residual = self.downsample(x)
+        else:
+            residual = x
+
+        out = self.conv_block(x) + residual
+        out = self.relu(out)
+
+        return out
+
+
 # Define the Discriminator layer
 class _netD(nn.Module):
     def __init__(self,input_nc,ndf=64,n_layer=3,norm_layer = nn.BatchNorm2d,gpu_ids =[]):
@@ -203,7 +240,7 @@ class _netD(nn.Module):
 
         sequence = [
             nn.Conv2d(input_nc,ndf,4,2,1,bias=False),
-            nn.LeakyReLU(0.2,inplace=True)
+            nn.LeakyReLU(0.2,True)
         ]
 
         nf_mult = 1
@@ -213,7 +250,7 @@ class _netD(nn.Module):
             sequence +=[
                 nn.Conv2d(ndf*nf_mult_prev,ndf*nf_mult,4,2,1,bias=use_bias),
                 norm_layer(ndf*nf_mult),
-                nn.LeakyReLU(0.2,inplace=True)
+                nn.LeakyReLU(0.2,True)
             ]
 
         sequence +=[nn.Conv2d(ndf*nf_mult, 1, 4, 1, 0, bias=False)]

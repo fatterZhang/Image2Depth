@@ -51,6 +51,9 @@ class Image2Depth():
             self.fake_Image_pool = ImagePool(opt.pool_size)
             self.fake_depth_pool = ImagePool(opt.pool_size)
 
+            # loss function
+            self.criterionCycle = torch.nn.L1Loss()
+
             #initialize optimizers
             self.optimizer_G_depth = torch.optim.Adam(self.netG_depth.parameters(), lr=opt.lr_G_depth, betas=(opt.beta1, 0.999))
             self.optimizer_G_Image = torch.optim.Adam(self.netG_Image.parameters(), lr=opt.lr_G_Image, betas=(opt.beta1, 0.999))
@@ -122,7 +125,7 @@ class Image2Depth():
 
         # forward cycle loss
         self.rec_Image = self.netG_Image.forward(self.fake_depth)
-        self.cycle_loss_Image = torch.nn.L1Loss.forward(self.rec_Image, self.real_Image) * lambda_Image
+        self.cycle_loss_Image = self.criterionCycle(self.rec_Image, self.real_Image) * lambda_Image
 
         self.image2depth_loss = self.G_loss_depth + self.cycle_loss_Image
 
@@ -137,11 +140,11 @@ class Image2Depth():
 
         #forward cycle loss
         self.rec_depth = self.netG_depth.forward(self.fake_Image)
-        self.cycle_loss_depth = torch.nn.L1Loss.forward(self.rec_depth, self.real_depth) * lambda_depth
+        self.cycle_loss_depth = self.criterionCycle(self.rec_depth, self.real_depth) * lambda_depth
 
         self.depth2image_loss = self.G_loss_Image + self.cycle_loss_depth
 
-        self.depth2image_loss.backward()
+        #self.depth2image_loss.backward()
 
     def optimize_parameters(self):
         # forward
@@ -160,7 +163,7 @@ class Image2Depth():
         self.optimizer_D_depth.step()
         # D_Image
         self.optimizer_D_Image.zero_grad()
-        self.backward_G_Image()
+        self.backward_D_Image()
         self.optimizer_D_Image.step()
 
 
