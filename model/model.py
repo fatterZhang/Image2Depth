@@ -1,7 +1,10 @@
 import os
 import torch
+import numpy as np
+from PIL import Image
 from collections import OrderedDict
 from torch.autograd import Variable
+from torchvision import transforms
 import itertools
 import util.util as util
 from util.image_pool import ImagePool
@@ -121,7 +124,7 @@ class Image2Depth():
         D_fake = self.netD_depth.forward(self.fake_depth)
         self.G_loss_depth = 0.5 * torch.mean((D_fake-1)**2)
         # depth continue loss
-
+        self.smooth_loss_depth = self.get_depth_smooth(self.fake_depth,self.real_Image) * lambda_smooth
 
         # forward cycle loss
         self.rec_Image = self.netG_Image.forward(self.fake_depth)
@@ -238,3 +241,59 @@ class Image2Depth():
         save_filename = '%s_net_%s.pth' % (epoch_label, network_label)
         save_path = os.path.join(self.save_dir, save_filename)
         network.load_state_dict(torch.load(save_path))
+
+    def scale_pyramid(self, img, num_scales):
+        scaled_imgs = [img.data]
+
+        s = img.size()
+
+        n = s[0]
+        c = s[1]
+        h = s[2]
+        w = s[3]
+
+        for i in range(1,num_scales):
+            ratio = 2**i
+            nh = h // ratio
+            nw = w // ratio
+            transform = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.Scale([nh,nw],Image.BICUBIC),
+                transforms.ToTensor()
+            ])
+            scaled_img = torch.FloatTensor(n,c,nh,nw).zero_()
+            for j in range(n-1):
+                scaled_img[j] = transform((img.data[j].cpu() + 1.0)/2.0) * 2.0 - 1.0
+            scaled_imgs.append(scaled_img)
+        return scaled_imgs
+
+    def gradient_x(self,img):
+        gx = img[:,:,:-1,:] - img[:,:,1:,:]
+        return gx
+
+    def gradient_y(self,img):
+        gy = img[:,:,:,:-1] - img[:,:,:,1:]
+        return gy
+
+    # calculate the gradient
+    def get_depth_smooth(self, depth, Image):
+        depths = self.scale_pyramid(depth, 4)
+        Images = self.scale_pyramid(Image,4)
+
+        depth_gradient_x = [self.gradient_x(d) for d in depths]
+        depth_gradient_y = [self.gradient_y(d) for d in depths]
+
+        Image_gradient_x = [self.gradient_x(img) for img in Images]
+        Image_gradient_y = [self.gradient_y(img) for img in Images]
+
+        weight_x = [torch.exp(-torch.mean(torch.abs(g), 1, keepdim=True)) for g in Image_gradient_x]
+        weight_y = [torch.exp(-torch.mean(torch.abs(g), 1, keepdim=True)) for g in Image_gradient_y]
+
+        smoothness_x = [depth_gradient_x[i] * weight_x[i] for i in range(4)]
+        smoothness_y = [depth_gradient_y[i] * weight_y[i] for i in range(4)]
+
+        loss_x = [torch.mean(torch.abs(smoothness_x[i]))/2**i for i in range(4)]
+        loss_y = [torch.mean(torch.abs(smoothness_y[i]))/2**i for i in range(4)]
+
+        return sum(loss_x + loss_y)
+

@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import functools
-from torch.autograd import Variable
 
 # custom weights initialization called on generator and discriminator
 def weights_init(m):
@@ -107,6 +106,7 @@ class _netG_Unet(nn.Module):
 class UnetBlock(nn.Module):
     def __init__(self,input_nc,output_nc,blocks =2, submodule=None, innermost=False, outermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False):
         super(UnetBlock, self).__init__()
+        self.outermost = outermost
 
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
@@ -159,10 +159,13 @@ class UnetBlock(nn.Module):
         return nn.Sequential(*layer)
 
     def forward(self, x):
-        out = torch.cat([x, self.model(x)], 1)
-        out = self.relu(out)
-        out = self.conv(out)
-        return out
+        if self.outermost:
+            return self.model(x)
+        else:
+            out = torch.cat([x, self.model(x)], 1)
+            out = self.relu(out)
+            out = self.conv(out)
+            return out
 
 # define a ResidualBlock
 class BasicBlock(nn.Module):
