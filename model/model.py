@@ -135,7 +135,7 @@ class Image2Depth():
         lambda_depth = self.opt.lambda_depth
         #GAN loss
         self.fake_Image = self.netG_Image.forward(self.real_depth)
-        D_fake = self.netD_depth.forward(self.fake_Image)
+        D_fake = self.netD_Image.forward(self.fake_Image)
         self.G_loss_Image = 0.5 * torch.mean((D_fake-1)**2)
 
         #forward cycle loss
@@ -144,7 +144,7 @@ class Image2Depth():
 
         self.depth2image_loss = self.G_loss_Image + self.cycle_loss_depth
 
-        #self.depth2image_loss.backward()
+        self.depth2image_loss.backward()
 
     def optimize_parameters(self):
         # forward
@@ -166,15 +166,64 @@ class Image2Depth():
         self.backward_D_Image()
         self.optimizer_D_Image.step()
 
+    def get_current_errors(self):
+        D_Image = self.D_loss_Image.data[0]
+        G_Image = self.G_loss_Image.data[0]
+        Cycle_Image = self.cycle_loss_Image.data[0]
+
+        D_depth = self.D_loss_depth.data[0]
+        G_depth = self.G_loss_depth.data[0]
+        Cycle_depth = self.cycle_loss_depth.data[0]
+
+        return OrderedDict([
+            ('D_Image', D_Image),('G_Image', G_Image), ('Cyc_Image', Cycle_Image),
+            ('D_depth', D_depth),('G_depth', G_depth), ('Cyc_depth', Cycle_depth)
+        ])
 
     def get_image_paths(self):
         return self.image_paths
 
     def get_current_visuals(self):
-        return self.input
+        real_Image = util.tensor2im(self.real_Image.data)
+        fake_depth = util.tensor2im(self.fake_depth.data)
+        rec_Image = util.tensor2im(self.rec_Image.data)
 
-    def get_current_errors(self):
-        return {}
+        real_depth = util.tensor2im(self.real_depth.data)
+        fake_Image = util.tensor2im(self.fake_Image.data)
+        rec_depth = util.tensor2im(self.rec_depth.data)
+
+        return OrderedDict([
+            ('real_Image', real_Image), ('fake_depth', fake_depth), ('rec_Image', rec_Image),
+            ('real_depth', real_depth), ('fake_Image', fake_Image), ('rec_depth', rec_depth)
+        ])
+
+    def save(self, label):
+        self.save_network(self.netG_depth, 'G_depth', label, self.gpu_ids)
+        self.save_network(self.netG_Image, 'G_Image', label, self.gpu_ids)
+        self.save_network(self.D_loss_depth, 'D_depth', label, self.gpu_ids)
+        self.save_network(self.D_loss_Image, 'D_Image', label, self.gpu_ids)
+
+    def update_learning_rate(self):
+        lrd_G_depth = self.opt.lr_G_depth / self.opt.niter_decay
+        lrd_G_Image = self.opt.lr_G_Image / self.opt.niter_decay
+        lrd_D_depth = self.opt.lr_D_depth / self.opt.niter_decay
+        lrd_D_Image = self.opt.lr_D_Image / self.opt.niter_decay
+        self.old_G_depth_lr -= lrd_G_depth
+        self.old_G_Image_lr -= lrd_G_Image
+        self.old_D_depth_lr -= lrd_D_depth
+        self.old_D_Image_lr -= lrd_D_Image
+
+        for param_group in self.optimizer_G_depth.param_groups:
+            param_group['lr'] = self.old_G_depth_lr
+        for param_group in self.optimizer_G_Image.param_groups:
+            param_group['lr'] = self.old_G_Image_lr
+        for param_group in self.optimizer_D_depth.param_groups:
+            param_group['lr'] = self.old_D_depth_lr
+        for param_group in self.optimizer_D_Image.param_groups:
+            param_group['lr'] = self.old_D_Image_lr
+
+        print('learning rate of G_depth, G_Image, D_depth, D_Image: %f, %f, %f, %f'
+              % (self.old_G_depth_lr, self.old_G_Image_lr, self.old_D_depth_lr, self.old_D_Image_lr))
 
     # helper saving function that can be used by subclasses
     def save_network(self, network, network_label, epoch_label, gpu_ids):

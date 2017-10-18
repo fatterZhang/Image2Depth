@@ -80,17 +80,20 @@ class _netG_Unet(nn.Module):
                  nn.ReLU()
                  ]
 
-        unet_block = UnetBlock (ngf,ngf,blocks=layers[0],norm_layer=norm_layer,innermost=True)
-        #unet_block = UnetBlock (ngf*4,ngf*4,blocks=layers[1],submodule=unet_block,norm_layer=norm_layer)
-        #unet_block = UnetBlock (ngf*2,ngf*2,blocks=layers[2],submodule=unet_block,norm_layer=norm_layer)
-        #unet_block = UnetBlock (ngf,ngf,blocks=layers[3],submodule=unet_block,norm_layer=norm_layer)
+        unet_block = UnetBlock (ngf*8,ngf*8,blocks=layers[3],norm_layer=norm_layer,innermost=True)
+        unet_block = UnetBlock (ngf*4,ngf*4,blocks=layers[2],submodule=unet_block,norm_layer=norm_layer)
+        unet_block = UnetBlock (ngf*2,ngf*2,blocks=layers[1],submodule=unet_block,norm_layer=norm_layer)
+        unet_block = UnetBlock (ngf,ngf,blocks=layers[0],submodule=unet_block,norm_layer=norm_layer,outermost=True)
 
         decoder = [nn.ReLU(),
-                nn.ConvTranspose2d(ngf,output_nc,kernel_size=4,stride=2,padding=1),
+                nn.ConvTranspose2d(ngf,ngf,kernel_size=4,stride=2,padding=1),
+                norm_layer(ngf),
+                nn.ReLU(),
+                nn.Conv2d(ngf, output_nc, kernel_size=3, stride=1, padding= 1),
                 nn.Tanh()
         ]
 
-        model = encoder + [unet_block]+ decoder
+        model = encoder + [unet_block] + decoder
 
         self.model = nn.Sequential(*model)
 
@@ -102,16 +105,22 @@ class _netG_Unet(nn.Module):
 
 # define the unet block
 class UnetBlock(nn.Module):
-    def __init__(self,input_nc,output_nc,blocks =2, submodule=None, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False):
+    def __init__(self,input_nc,output_nc,blocks =2, submodule=None, innermost=False, outermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False):
         super(UnetBlock, self).__init__()
-        self.innermost = innermost
-        self.input_nc = input_nc
+
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
 
-        encoder = self._make_layer(Bottlenck,input_nc,blocks,norm_layer,use_bias,use_dropout,stride=2)
+        if outermost:
+            self.input_nc = input_nc
+            self.conv = nn.Conv2d(output_nc * 2, output_nc, kernel_size=3, stride=1, padding=1)
+        else:
+            self.input_nc = input_nc * 2
+            self.conv = nn.Conv2d(output_nc * 3, output_nc, kernel_size=3, stride=1, padding=1)
+
+        encoder = self._make_layer(Bottlenck,output_nc,blocks,norm_layer,use_bias,use_dropout,stride=2)
 
         if innermost:
             decoder = [
@@ -122,7 +131,7 @@ class UnetBlock(nn.Module):
         else:
             decoder = [
                 nn.ReLU(True),
-                nn.ConvTranspose2d(input_nc*4, output_nc, kernel_size=4, stride=2, padding=1, bias=use_bias),
+                nn.ConvTranspose2d(input_nc*2, output_nc, kernel_size=4, stride=2, padding=1, bias=use_bias),
                 norm_layer(output_nc)
             ]
             if use_dropout:
@@ -132,7 +141,6 @@ class UnetBlock(nn.Module):
 
         self.model = nn.Sequential(*model)
         self.relu = nn.ReLU(True)
-        self.conv = nn.Conv2d(output_nc*2,output_nc,kernel_size=3, stride=1,padding=1)
 
     def _make_layer(self,block,output_nc,blocks,norm_layer,use_bias,use_dropout,stride=1):
         downsample = None
@@ -144,6 +152,7 @@ class UnetBlock(nn.Module):
 
         layer = [block(self.input_nc,output_nc,norm_layer,use_bias,use_dropout,stride,downsample)]
         self.input_nc = output_nc*block.expansion
+
         for i in range(1,blocks):
             layer +=[block(self.input_nc,output_nc,norm_layer,use_bias,use_dropout)]
 
