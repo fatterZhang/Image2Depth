@@ -130,7 +130,7 @@ class Image2Depth():
         self.rec_Image = self.netG_Image.forward(self.fake_depth)
         self.cycle_loss_Image = self.criterionCycle(self.rec_Image, self.real_Image) * lambda_Image
 
-        self.image2depth_loss = self.G_loss_depth + self.cycle_loss_Image
+        self.image2depth_loss = self.G_loss_depth + self.cycle_loss_Image + self.smooth_loss_depth
 
         self.image2depth_loss.backward()
 
@@ -178,9 +178,11 @@ class Image2Depth():
         G_depth = self.G_loss_depth.data[0]
         Cycle_depth = self.cycle_loss_depth.data[0]
 
+        Smooth_depth = self.smooth_loss_depth
+
         return OrderedDict([
             ('D_Image', D_Image),('G_Image', G_Image), ('Cyc_Image', Cycle_Image),
-            ('D_depth', D_depth),('G_depth', G_depth), ('Cyc_depth', Cycle_depth)
+            ('D_depth', D_depth),('G_depth', G_depth), ('Cyc_depth', Cycle_depth), ('Smooth_depth', Smooth_depth)
         ])
 
     def get_image_paths(self):
