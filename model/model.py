@@ -205,8 +205,8 @@ class Image2Depth():
     def save(self, label):
         self.save_network(self.netG_depth, 'G_depth', label, self.gpu_ids)
         self.save_network(self.netG_Image, 'G_Image', label, self.gpu_ids)
-        self.save_network(self.D_loss_depth, 'D_depth', label, self.gpu_ids)
-        self.save_network(self.D_loss_Image, 'D_Image', label, self.gpu_ids)
+        self.save_network(self.netD_depth, 'D_depth', label, self.gpu_ids)
+        self.save_network(self.netD_Image, 'D_Image', label, self.gpu_ids)
 
     def update_learning_rate(self):
         lrd_G_depth = self.opt.lr_G_depth / self.opt.niter_decay
