@@ -11,7 +11,7 @@ class BaseOptions():
     def initialize(self):
         self.parser.add_argument('--dataroot', type = str, default='./datasets/Image2Depth_SUN',
                                  help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')
-        self.parser.add_argument('--batchSize', type=int, default=1,
+        self.parser.add_argument('--batchSize', type=int, default=12,
                                  help='input batch size')
         self.parser.add_argument('--loadSize', type=int, default=286,
                                  help='scale images to this size')
@@ -25,7 +25,7 @@ class BaseOptions():
                                  help='# of gen filters in first conv layer')
         self.parser.add_argument('--ndf', type=int, default=64,
                                  help='# of discrim filters in first conv layer')
-        self.parser.add_argument('--gpu_ids', type=str, default='0',
+        self.parser.add_argument('--gpu_ids', type=str, default='3',
                                  help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         self.parser.add_argument('--name', type=str, default='experiment_name',
                                  help='name of the experiment. It decides where to store samples and models')
