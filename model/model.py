@@ -33,8 +33,8 @@ class Image2Depth():
                                             opt.norm, not opt.no_dropout, self.gpu_ids)
 
         if self.isTrain:
-            self.netD_depth = networks.define_D(opt.output_nc, opt.ndf,opt.n_layers_D, opt.norm, self.gpu_ids)
-            self.netD_Image = networks.define_D(opt.input_nc, opt.ndf, opt.n_layers_D, opt.norm, self.gpu_ids)
+            self.netD_depth = networks.define_D(opt.output_nc, opt.ndf, opt.which_netD,  opt.Resblock, opt.norm, self.gpu_ids)
+            self.netD_Image = networks.define_D(opt.input_nc, opt.ndf, opt.which_netD, opt.Resblock, opt.norm, self.gpu_ids)
 
         if not self.isTrain or opt.continue_train:
             which_epoch = opt.which_epoch
@@ -154,12 +154,16 @@ class Image2Depth():
         self.forward()
         # G_depth
         self.optimizer_G_depth.zero_grad()
+        self.optimizer_G_Image.zero_grad()
         self.backward_G_depth()
         self.optimizer_G_depth.step()
+        self.optimizer_G_Image.step()
         # G_Image
         self.optimizer_G_Image.zero_grad()
+        self.optimizer_G_depth.zero_grad()
         self.backward_G_Image()
         self.optimizer_G_Image.step()
+        self.optimizer_G_depth.step()
         # D_depth
         self.optimizer_D_depth.zero_grad()
         self.backward_D_depth()

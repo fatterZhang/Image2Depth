@@ -67,7 +67,10 @@ if __name__ == '__main__':
     a3 = np.zeros(num_samples,np.float32)
 
     for i in range(len(ground_truth)):
-        abs_rel[i], sq_rel[i], rmse[i], rmse_log[i], a1[i], a2[i], a3[i] = compute_errors(ground_truth[i],predicted_truth[i])
+        ground = ground_truth[i]
+        predicted = predicted_truth[i]
+        mask = np.logical_and(ground > args.min_depth, ground < args.max_depth)
+        abs_rel[i], sq_rel[i], rmse[i], rmse_log[i], a1[i], a2[i], a3[i] = compute_errors(ground[mask],predicted[mask])
 
     print ('{:>10},{:>10},{:>10},{:>10},{:>10},{:>10},{:>10}'.format('abs_rel','sq_rel','rmse','rmse_log','a1','a2','a3'))
     print ('{:10.4f},{:10.4f},{:10.4f},{:10.4f},{:10.4f},{:10.4f},{:10.4f}'

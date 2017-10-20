@@ -37,12 +37,17 @@ def define_G(input_nc, output_nc, ngf, layers=[2,2,2,2], norm='batch', use_dropo
     return netG
 
 # define the discriminator and initialize
-def define_D(input_nc,ndf,n_layers_D=3,norm='batch',gpu_ids=[]):
+def define_D(input_nc,ndf, which_model_netD, layers=[2,2,2,2],norm='batch',gpu_ids=[]):
     netD = None
     use_gpu = len(gpu_ids) > 0
     norm_layer = get_norm_layer(norm_type=norm)
 
-    netD = _netD(input_nc,ndf,n_layers_D,norm_layer,gpu_ids)
+    if which_model_netD == 'Dcnet':
+        netD = _netD(input_nc,ndf,layers[0],norm_layer,gpu_ids)
+    elif which_model_netD =='Resnet':
+        netD = _netD_Res(input_nc,ndf,layers,norm_layer,gpu_ids)
+    else:
+        raise NotImplementedError('No such discriminator [%s] is found' % which_model_netD)
 
     if use_gpu:
         assert (torch.cuda.is_available())
@@ -238,6 +243,53 @@ class Bottlenck(nn.Module):
         out = self.relu(out)
 
         return out
+
+class _netD_Res(nn.Module):
+    def __init__(self,input_nc,ndf=64,layers=[2,2,2,2],norm_layer = nn.BatchNorm2d,gpu_ids=[]):
+        super(_netD_Res,self).__init__()
+        self.gpu_ids = gpu_ids
+        self.input_nc = ndf
+        if type(norm_layer) == functools.partial:
+            use_bias = norm_layer.func == nn.InstanceNorm2d
+        else:
+            use_bias = norm_layer == nn.InstanceNorm2d
+
+        sequence =[
+            nn.Conv2d(input_nc,ndf,4,2,1,bias=False),
+            nn.LeakyReLU(0.2,True)
+        ]
+
+        for n in range(len(layers)):
+            sequence += self._make_layer(Bottlenck, ndf * (2**n), layers[n], norm_layer, use_bias, use_dropout=False, stride =2)
+
+        sequence += [nn.Conv2d(ndf * 32, 1, 4, 1, 0, bias=False)]
+
+        self.model = nn.Sequential(*sequence)
+
+    def _make_layer(self, block, output_nc, blocks, norm_layer, use_bias, use_dropout, stride=1):
+        downsample = None
+        if stride != 1 or self.input_nc != output_nc * block.expansion:
+            downsample = nn.Sequential(
+                    nn.Conv2d(self.input_nc, output_nc * block.expansion, kernel_size=1, stride=stride, bias=False),
+                    norm_layer(output_nc * block.expansion)
+            )
+
+        layer = [block(self.input_nc, output_nc, norm_layer, use_bias, use_dropout, stride, downsample)]
+        self.input_nc = output_nc * block.expansion
+
+        for i in range(1, blocks):
+            layer += [block(self.input_nc, output_nc, norm_layer, use_bias, use_dropout)]
+
+        return layer
+
+    def forward(self,input):
+        if isinstance(input.data,torch.cuda.FloatTensor) and len(self.gpu_ids):
+            output = nn.parallel.data_parallel(self.model, input, self.gpu_ids)
+        else:
+            output = self.model(input)
+
+        return output.view(-1,1).squeeze(1)
+
 
 
 # Define the Discriminator layer
