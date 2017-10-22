@@ -38,7 +38,8 @@ class UnalignedData(data.Dataset):
         self.A_size = len(self.A_paths)
         self.B_size = len(self.B_paths)
 
-        self.transform = get_transform(opt)
+        self.transform_Image = get_transform(opt,True)
+        self.transform_depth = get_transform(opt,False)
 
     def __getitem__(self, item):
         A_path = self.A_paths[item % self.A_size]
@@ -48,8 +49,8 @@ class UnalignedData(data.Dataset):
         A_image = Image.open(A_path)
         B_image = Image.open(B_path)
 
-        A_image = self.transform(A_image)
-        B_image = self.transform(B_image)
+        A_image = self.transform_Image(A_image)
+        B_image = self.transform_depth(B_image)
 
         return {'A':A_image,'B':B_image,'A_paths':A_path,'B_paths':B_path}
 
@@ -60,7 +61,7 @@ class UnalignedData(data.Dataset):
         return 'UnalignedDataset'
 
 
-def get_transform(opt):
+def get_transform(opt,augment=False):
     transform_list = []
     if opt.resize_or_crop == "resize_and_crop":
         osize = [opt.loadSize,opt.loadSize]
@@ -76,6 +77,12 @@ def get_transform(opt):
 
     if opt.isTrain and not opt.no_flip:
         transform_list.append(transforms.RandomHorizontalFlip())
+
+    if opt.isTrain and augment:
+        brightness = random.uniform(0.8,1.2)
+        contrast = random.uniform(0.5,2.0)
+        saturation = random.uniform(0.8,1.2)
+        transform_list.append(transforms.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=0.5))
 
     transform_list += [transforms.ToTensor(),transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5))]
 
