@@ -11,7 +11,7 @@ class BaseOptions():
     def initialize(self):
         self.parser.add_argument('--dataroot', type = str, default='./datasets/Image2Depth_SUN',
                                  help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')
-        self.parser.add_argument('--batchSize', type=int, default=24,
+        self.parser.add_argument('--batchSize', type=int, default=32,
                                  help='input batch size')
         self.parser.add_argument('--loadSize', type=int, default=286,
                                  help='scale images to this size')
@@ -19,13 +19,13 @@ class BaseOptions():
                                  help='then crop to this size')
         self.parser.add_argument('--input_nc', type=int, default=3,
                                  help='# of input image channels')
-        self.parser.add_argument('--output_nc', type=int, default=3,
+        self.parser.add_argument('--output_nc', type=int, default=1,
                                  help='# of output image channels')
         self.parser.add_argument('--ngf', type=int, default=64,
                                  help='# of gen filters in first conv layer')
         self.parser.add_argument('--ndf', type=int, default=64,
                                  help='# of discrim filters in first conv layer')
-        self.parser.add_argument('--gpu_ids', type=str, default='4',
+        self.parser.add_argument('--gpu_ids', type=str, default='1,2,0',
                                  help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         self.parser.add_argument('--name', type=str, default='experiment_name',
                                  help='name of the experiment. It decides where to store samples and models')

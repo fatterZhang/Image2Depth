@@ -30,7 +30,7 @@ def define_G(input_nc, output_nc, ngf, layers=[2,2,2,2], norm='batch', use_dropo
 
     if use_gpu:
         assert (torch.cuda.is_available())
-        netG.cuda(device_id = gpu_ids[0])
+        netG.cuda()
 
     netG.apply(weights_init)
 
@@ -51,7 +51,7 @@ def define_D(input_nc,ndf, which_model_netD, layers=[2,2,2,2],norm='batch',gpu_i
 
     if use_gpu:
         assert (torch.cuda.is_available())
-        netD.cuda(device_id = gpu_ids[0])
+        netD.cuda()
 
     netD.apply(weights_init)
 
@@ -217,12 +217,12 @@ class Bottlenck(nn.Module):
         conv_block = [
             nn.Conv2d(input_nc, output_nc, kernel_size=1, bias=use_bias),
             norm_layer(output_nc),
-            nn.ReLU(True)
+            nn.LeakyReLU(0.2, True)
         ]
         conv_block +=[
             nn.Conv2d(output_nc, output_nc, kernel_size=3, stride=stride, padding=1, bias=use_bias),
             norm_layer(output_nc),
-            nn.ReLU(True)
+            nn.LeakyReLU(0.2, True)
         ]
         conv_block +=[
             nn.Conv2d(output_nc, output_nc*4, kernel_size=1, bias=use_bias),
@@ -230,7 +230,7 @@ class Bottlenck(nn.Module):
         ]
 
         self.conv_block = nn.Sequential(*conv_block)
-        self.relu = nn.Sequential(nn.ReLU(True))
+        self.relu = nn.Sequential(nn.LeakyReLU(0.2,True))
         self.downsample = downsample
 
     def forward(self, x):

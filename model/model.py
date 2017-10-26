@@ -122,7 +122,7 @@ class Image2Depth():
         # GAN loss
         self.fake_depth = self.netG_depth.forward(self.real_Image)
         D_fake = self.netD_depth.forward(self.fake_depth)
-        self.G_loss_depth = 0.5 * torch.mean((D_fake-1)**2)
+        self.G_loss_depth = torch.mean((D_fake-1)**2)
         # depth continue loss
         self.smooth_loss_depth = self.get_depth_smooth(self.fake_depth,self.real_Image) * lambda_smooth
 
@@ -139,7 +139,7 @@ class Image2Depth():
         #GAN loss
         self.fake_Image = self.netG_Image.forward(self.real_depth)
         D_fake = self.netD_Image.forward(self.fake_Image)
-        self.G_loss_Image = 0.5 * torch.mean((D_fake-1)**2)
+        self.G_loss_Image = torch.mean((D_fake-1)**2)
 
         #forward cycle loss
         self.rec_depth = self.netG_depth.forward(self.fake_Image)
@@ -240,7 +240,7 @@ class Image2Depth():
         save_path = os.path.join(self.save_dir, save_filename)
         torch.save(network.cpu().state_dict(), save_path)
         if len(gpu_ids) and torch.cuda.is_available():
-            network.cuda(device_id=gpu_ids[0])
+            network.cuda()
 
     # helper loading function that can be used by subclasses
     def load_network(self, network, network_label, epoch_label):
